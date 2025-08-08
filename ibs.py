@@ -74,6 +74,8 @@ class IntrabeamScattering(Element):
         parameter will only serve to generate an optic function at the proper size. 
         If `sectorMap` is False and `distributed` is False but `sectors > 1`, 
         repeated kicks are applied to the entire ring, which may underestimate the IBS effect.
+        to avoide overkicking the maximum value of sectors should be set to (N-1)*P, N is the
+        number of bends per achromat, P is the periodicity.
         The Default is False.
     sectors: int, optional
         The default is False.
@@ -130,7 +132,7 @@ class IntrabeamScattering(Element):
         else:
             self.s = np.linspace(0, self.ring.L/self.sectors, self.n_points)
         self.model = str(model)
-        #try block is for testing in case we want to import optic array from another code
+        #try block is for testing in case we want to import optics array from another code
         try: 
             self.beta_x, self.beta_y = self.ring.optics.beta(self.s)
             self.dispX, self.disppX, self.dispY, self.disppY = self.ring.optics.dispersion(
@@ -492,14 +494,17 @@ class IntrabeamScattering(Element):
         if self.distrbuted is True:
             for i,el in enumerate(self.indexes[0]):
                 Delta_pz = self.sigma_p * np.sqrt(
-                    np.sqrt(2) * T_p[el] * self.dt[i] *
+                    np.sqrt(2) * T_p[el] * self.ring.T0/self.n_points *
                     Rho) * np.random.normal(size=N_mp)
                 Delta_px = self.sigma_px * np.sqrt(
-                    np.sqrt(2) * T_x[el] * self.dt[i] *
+                    np.sqrt(2) * T_x[el] * self.ring.T0/self.n_points *
                     Rho) * np.random.normal(size=N_mp)
                 Delta_py = self.sigma_py * np.sqrt(
-                    np.sqrt(2) * T_y[el] * self.dt[i] *
+                    np.sqrt(2) * T_y[el] * self.ring.T0/self.n_points *
                     Rho) * np.random.normal(size=N_mp)
+                bunch['xp'] += Delta_px
+                bunch['yp'] += Delta_py
+                bunch['delta'] += Delta_pz
         # if sectormap set to True, the kick will be applied to each sector of the ring, however there is no for loop
         # thus it is needed to be applied with TransverseSectorMap
         # here the code will compute Tibs for one sector and kick only once, thus the function should be called after each
@@ -514,6 +519,9 @@ class IntrabeamScattering(Element):
             Delta_py = self.sigma_py * np.sqrt(
                 np.sqrt(2) * T_y * (self.ring.T0/self.sectors) *
                 Rho) * np.random.normal(size=N_mp)
+            bunch['xp'] += Delta_px
+            bunch['yp'] += Delta_py
+            bunch['delta'] += Delta_pz
         #This is the default case, where the kick can be applied to the entire ring if sectormap is False 
         # and sectors is set to 1.
         # In this case the code will compute Tibs for the entire ring and kick only once per turn.
@@ -529,9 +537,9 @@ class IntrabeamScattering(Element):
                 Delta_py = self.sigma_py * np.sqrt(
                     np.sqrt(2) * T_y * (self.ring.T0/self.sectors) *
                     Rho) * np.random.normal(size=N_mp)
-        bunch['xp'] += Delta_px
-        bunch['yp'] += Delta_py
-        bunch['delta'] += Delta_pz
+            bunch['xp'] += Delta_px
+            bunch['yp'] += Delta_py
+            bunch['delta'] += Delta_pz
 
     @Element.parallel
     @Element.track_bunch_if_non_empty
